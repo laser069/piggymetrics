@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/sqshq/PiggyMetrics.svg?branch=master)](https://travis-ci.org/sqshq/PiggyMetrics)
-[![codecov.io](https://codecov.io/github/sqshq/PiggyMetrics/coverage.svg?branch=master)](https://codecov.io/github/sqshq/PiggyMetrics?branch=master)
+[![CI/CD](https://github.com/laser069/piggymetrics/actions/workflows/ci-cd.yml/badge.svg?branch=master)](https://github.com/laser069/piggymetrics/actions/workflows/ci-cd.yml)
+[![CodeQL](https://github.com/laser069/piggymetrics/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/laser069/piggymetrics/actions/workflows/codeql.yml)
 [![GitHub license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/sqshq/PiggyMetrics/blob/master/LICENCE)
 [![Join the chat at https://gitter.im/sqshq/PiggyMetrics](https://badges.gitter.im/sqshq/PiggyMetrics.svg)](https://gitter.im/sqshq/PiggyMetrics?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 

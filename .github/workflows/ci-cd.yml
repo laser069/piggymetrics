@@ -1,0 +1,185 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Least privilege by default; the docker job raises it for itself only.
+permissions:
+  contents: read
+
+# A new push to the same PR/branch cancels the older CI run (never a running deploy).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # CI: compile, run unit tests, measure coverage, package jars.
+  # Runs on every PR and push. Anything broken stops here, before images exist.
+  # ---------------------------------------------------------------------------
+  build-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8' # project targets Java 8 / Spring Boot 2.0.3
+          cache: maven # caches ~/.m2 keyed on pom.xml hashes
+
+      # Tests use embedded MongoDB (flapdoodle) which downloads a mongod binary.
+      - name: Cache embedded MongoDB binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.embedmongo
+          key: embedmongo-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: embedmongo-${{ runner.os }}-
+
+      - name: Build and test all modules
+        run: mvn -B -ntp verify
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/target/surefire-reports/
+            **/target/site/jacoco/
+          if-no-files-found: ignore
+
+      # Build once, ship the same jars into the images (no rebuild per image).
+      - name: Upload service jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: '*/target/*.jar'
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Package: one Docker image per deployed service, pushed to GHCR.
+  # Only on master, only after tests pass.
+  # ---------------------------------------------------------------------------
+  docker:
+    needs: build-test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [config, registry, gateway, auth-service, account-service, mongodb]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: jars # restores <service>/target/<service>.jar next to each Dockerfile
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # sha-xxxxxxx = immutable, used for deploy and rollback. latest = convenience.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/piggymetrics-${{ matrix.service }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ---------------------------------------------------------------------------
+  # CD: ssh to the VM, pull the exact sha-tagged images, restart, health-check.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: docker
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-22.04
+    environment: production
+    concurrency:
+      group: deploy-production # never two deploys at once
+      cancel-in-progress: false
+    env:
+      SSH_OPTS: -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30
+      TARGET: ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare ssh key
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Copy compose file
+        run: |
+          ssh $SSH_OPTS "$TARGET" 'mkdir -p ~/piggymetrics'
+          scp $SSH_OPTS docker-compose.prod.yml "$TARGET":~/piggymetrics/docker-compose.yml
+
+      # Secrets travel over the encrypted ssh stdin, never on a command line.
+      - name: Write .env on the VM
+        env:
+          CONFIG_SERVICE_PASSWORD: ${{ secrets.CONFIG_SERVICE_PASSWORD }}
+          NOTIFICATION_SERVICE_PASSWORD: ${{ secrets.NOTIFICATION_SERVICE_PASSWORD }}
+          STATISTICS_SERVICE_PASSWORD: ${{ secrets.STATISTICS_SERVICE_PASSWORD }}
+          ACCOUNT_SERVICE_PASSWORD: ${{ secrets.ACCOUNT_SERVICE_PASSWORD }}
+          MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
+        run: |
+          {
+            echo "REGISTRY=${REGISTRY}"
+            echo "TAG=sha-${GITHUB_SHA::7}"
+            echo "CONFIG_SERVICE_PASSWORD=${CONFIG_SERVICE_PASSWORD}"
+            echo "NOTIFICATION_SERVICE_PASSWORD=${NOTIFICATION_SERVICE_PASSWORD}"
+            echo "STATISTICS_SERVICE_PASSWORD=${STATISTICS_SERVICE_PASSWORD}"
+            echo "ACCOUNT_SERVICE_PASSWORD=${ACCOUNT_SERVICE_PASSWORD}"
+            echo "MONGODB_PASSWORD=${MONGODB_PASSWORD}"
+          } | ssh $SSH_OPTS "$TARGET" 'umask 077 && cat > ~/piggymetrics/.env'
+
+      - name: Pull and restart containers
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          printf '%s' "$GHCR_PAT" | ssh $SSH_OPTS "$TARGET" \
+            "docker login ghcr.io -u $OWNER --password-stdin"
+          ssh $SSH_OPTS "$TARGET" 'cd ~/piggymetrics && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f'
+
+      # Containers being "up" is not "app works". Poll the gateway; fail the job if it never answers.
+      - name: Health check
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+        run: |
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$VM_HOST/" || true)
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          echo "Gateway did not become healthy"
+          ssh $SSH_OPTS "$TARGET" 'cd ~/piggymetrics && docker compose ps && docker compose logs --tail=40' || true
+          exit 1

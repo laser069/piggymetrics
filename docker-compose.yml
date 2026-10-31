@@ -13,7 +13,7 @@ services:
   config:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-config
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-config:${TAG:-latest}
     restart: always
     logging:
       options:
@@ -23,7 +23,7 @@ services:
   registry:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-registry
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-registry:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -38,7 +38,7 @@ services:
   gateway:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-gateway
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-gateway:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -57,7 +57,7 @@ services:
       STATISTICS_SERVICE_PASSWORD: $STATISTICS_SERVICE_PASSWORD
       ACCOUNT_SERVICE_PASSWORD: $ACCOUNT_SERVICE_PASSWORD
       MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-auth-service
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-auth-service:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -70,7 +70,7 @@ services:
   auth-mongodb:
     environment:
       MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-mongodb
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-mongodb:${TAG:-latest}
     restart: always
     logging:
       options:
@@ -82,7 +82,7 @@ services:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
       ACCOUNT_SERVICE_PASSWORD: $ACCOUNT_SERVICE_PASSWORD
       MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-account-service
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-account-service:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -96,7 +96,7 @@ services:
     environment:
       INIT_DUMP: account-service-dump.js
       MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-mongodb
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-mongodb:${TAG:-latest}
     restart: always
     logging:
       options:
@@ -108,7 +108,7 @@ services:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
       MONGODB_PASSWORD: $MONGODB_PASSWORD
       STATISTICS_SERVICE_PASSWORD: $STATISTICS_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-statistics-service
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-statistics-service:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -121,7 +121,7 @@ services:
   statistics-mongodb:
     environment:
       MONGODB_PASSWORD: $MONGODB_PASSWORD
-    image: sqshq/piggymetrics-mongodb
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-mongodb:${TAG:-latest}
     restart: always
     logging:
       options:
@@ -133,7 +133,7 @@ services:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
       MONGODB_PASSWORD: $MONGODB_PASSWORD
       NOTIFICATION_SERVICE_PASSWORD: $NOTIFICATION_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-notification-service
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-notification-service:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -144,7 +144,7 @@ services:
         max-file: "10"
 
   notification-mongodb:
-    image: sqshq/piggymetrics-mongodb
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-mongodb:${TAG:-latest}
     restart: always
     environment:
       MONGODB_PASSWORD: $MONGODB_PASSWORD
@@ -156,7 +156,7 @@ services:
   monitoring:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-monitoring
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-monitoring:${TAG:-latest}
     restart: always
     depends_on:
       config:
@@ -171,7 +171,7 @@ services:
   turbine-stream-service:
     environment:
       CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
-    image: sqshq/piggymetrics-turbine-stream-service
+    image: ${REGISTRY:-ghcr.io/laser069}/piggymetrics-turbine-stream-service:${TAG:-latest}
     restart: always
     depends_on:
       config:

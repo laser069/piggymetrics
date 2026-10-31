@@ -1,0 +1,91 @@
+# Core subset for a small (<=2GB) VM. Deployed by .github/workflows/ci-cd.yml.
+# Skipped on purpose: monitoring, turbine, statistics, notification, rabbitmq.
+x-logging: &logging
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  config:
+    image: ${REGISTRY}/piggymetrics-config:${TAG}
+    restart: always
+    environment:
+      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      JAVA_OPTS: -Xmx128m -Xss512k
+    mem_limit: 300m
+    logging: *logging
+
+  registry:
+    image: ${REGISTRY}/piggymetrics-registry:${TAG}
+    restart: always
+    environment:
+      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      JAVA_OPTS: -Xmx128m -Xss512k
+    depends_on:
+      config:
+        condition: service_healthy
+    ports:
+      - 8761:8761
+    mem_limit: 300m
+    logging: *logging
+
+  gateway:
+    image: ${REGISTRY}/piggymetrics-gateway:${TAG}
+    restart: always
+    environment:
+      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      JAVA_OPTS: -Xmx128m -Xss512k
+    depends_on:
+      config:
+        condition: service_healthy
+    ports:
+      - 80:4000
+    mem_limit: 300m
+    logging: *logging
+
+  auth-service:
+    image: ${REGISTRY}/piggymetrics-auth-service:${TAG}
+    restart: always
+    environment:
+      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      NOTIFICATION_SERVICE_PASSWORD: $NOTIFICATION_SERVICE_PASSWORD
+      STATISTICS_SERVICE_PASSWORD: $STATISTICS_SERVICE_PASSWORD
+      ACCOUNT_SERVICE_PASSWORD: $ACCOUNT_SERVICE_PASSWORD
+      MONGODB_PASSWORD: $MONGODB_PASSWORD
+      JAVA_OPTS: -Xmx128m -Xss512k
+    depends_on:
+      config:
+        condition: service_healthy
+    mem_limit: 300m
+    logging: *logging
+
+  auth-mongodb:
+    image: ${REGISTRY}/piggymetrics-mongodb:${TAG}
+    restart: always
+    environment:
+      MONGODB_PASSWORD: $MONGODB_PASSWORD
+    mem_limit: 200m
+    logging: *logging
+
+  account-service:
+    image: ${REGISTRY}/piggymetrics-account-service:${TAG}
+    restart: always
+    environment:
+      CONFIG_SERVICE_PASSWORD: $CONFIG_SERVICE_PASSWORD
+      ACCOUNT_SERVICE_PASSWORD: $ACCOUNT_SERVICE_PASSWORD
+      MONGODB_PASSWORD: $MONGODB_PASSWORD
+      JAVA_OPTS: -Xmx128m -Xss512k
+    depends_on:
+      config:
+        condition: service_healthy
+    mem_limit: 300m
+    logging: *logging
+
+  account-mongodb:
+    image: ${REGISTRY}/piggymetrics-mongodb:${TAG}
+    restart: always
+    environment:
+      INIT_DUMP: account-service-dump.js
+      MONGODB_PASSWORD: $MONGODB_PASSWORD
+    mem_limit: 200m
+    logging: *logging
