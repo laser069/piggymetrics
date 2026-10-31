@@ -155,23 +155,7 @@ There is no deploy job. The images are published and ready; run them anywhere wi
 
 ---
 
-## 2. `.github/workflows/codeql.yml` (security scan)
-
-- Triggers: PRs, pushes to master, and a weekly `cron` schedule (`'0 3 * * 1'` = Mondays 03:00 UTC) because new vulnerability patterns are discovered over time.
-- `security-events: write` lets it publish findings to the repo's Security tab.
-- Steps: install Java -> `codeql-action/init` (start watching) -> `mvn -DskipTests package` (CodeQL needs to watch a compile; tests aren't needed) -> `analyze` (scan and report).
-
-
-
-## 3. `.github/dependabot.yml`
-
-Tells GitHub's Dependabot to check weekly for newer versions of: Maven libraries (`/`), the actions used in workflows, and Docker base images (`/gateway` as a sample Dockerfile). It opens PRs so versions don't go stale silently.
-
----
-
-
-
-## 4. `docker-compose.prod.yml` (a small-memory setup that runs the published images)
+## 2. `docker-compose.prod.yml` (a small-memory setup that runs the published images)
 
 ```yaml
 x-logging: &logging
@@ -210,12 +194,12 @@ gateway:
 
 Services included: `config` (settings server), `registry` (service directory), `gateway` (front door + web UI), `auth-service` + `auth-mongodb` (login + its DB), `account-service` + `account-mongodb` (accounts + its DB). `INIT_DUMP: account-service-dump.js` tells the account DB which sample data to load. Left out to save RAM: monitoring, turbine, statistics, notification, rabbitmq.
 
-## 5. `docker-compose.yml` (original, edited)
+## 3. `docker-compose.yml` (original, edited)
 
 Only the `image:` lines changed: `sqshq/piggymrics-config` -> `${REGISTRY:-ghcr.io/laser069}/piggymetrics-config:${TAG:-latest}`.
 `${VAR:-default}` = use VAR if set, else the default. Before, it pulled the original author's images; now it uses yours, by default `latest`.
 
-## 6. The 9 `Dockerfile`s (config, registry, gateway, auth-service, account-service, statistics-service, notification-service, monitoring, turbine-stream-service)
+## 4. The 9 `Dockerfile`s (config, registry, gateway, auth-service, account-service, statistics-service, notification-service, monitoring, turbine-stream-service)
 
 Before:
 
@@ -241,7 +225,7 @@ CMD ["sh", "-c", "exec java $JAVA_OPTS -jar /app/gateway.jar"]
 
 The `mongodb/Dockerfile` is unchanged (still built and pushed as an image).
 
-## 7. Root `pom.xml` (JaCoCo)
+## 5. Root `pom.xml` (JaCoCo)
 
 Added a `<build><plugins>` block with `jacoco-maven-plugin` 0.8.5:
 
@@ -251,30 +235,30 @@ Every module inherits from this root pom, so all get coverage with one edit.
 
 
 
-## 8. The four service `pom.xml`s (account, auth, notification, statistics)
+## 6. The four service `pom.xml`s (account, auth, notification, statistics)
 
 These were already your uncommitted edits. Each adds the `lombok` library (marked `optional`), which generates boilerplate such as getters/setters at compile time.
 
-## 9. Secrets hygiene
+## 7. Secrets hygiene
 
 - `.env` was committed with real values. Now `git rm --cached .env` untracked it (file stays on your disk), `.gitignore` gets a `.env` line so it cannot be re-added by accident, and `.env.example` shows the shape with fake values.
 - Anything already in git history stays visible there; rotate real passwords.
 
 
 
-## 10. `.travis.yml` deleted
+## 8. `.travis.yml` deleted
 
 The original author's old CI (Travis). It contained encrypted values only they can use, and would do nothing for you now. GitHub Actions replaces it.
 
-## 11. `README.md`
+## 9. `README.md`
 
-The two badges at the top (Travis, Codecov) now point to your CI/CD and CodeQL workflows, so the README shows green/red status.
+The two badges at the top (Travis, Codecov) were replaced by one badge for your CI/CD workflow, so the README shows green/red status.
 
-## 12. Test change: `statistics-service/.../ExchangeRatesClientTest.java`
+## 10. Test change: `statistics-service/.../ExchangeRatesClientTest.java`
 
 Added `import org.junit.Ignore;` and `@Ignore("...")` on the class. Those two tests call a real public exchange-rate website; it now answers `401 missing_access_key`, so they failed in CI for reasons unrelated to our code. `@Ignore` tells JUnit to skip them (with the reason in the report). The proper long-term fix is mocking that web call in the test.
 
-## 13. `learn/` docs
+## 11. `learn/` docs
 
 `learn/01`-`07` were your own notes; `08-cicd.md` is the short overview; this file is the detailed walk-through.
 
@@ -282,10 +266,10 @@ Added `import org.junit.Ignore;` and `@Ignore("...")` on the class. Those two te
 
 
 
-## 14. How a change flows, end to end
+## 12. How a change flows, end to end
 
 1. You commit on a branch and open a PR.
-2. `build-test` runs: compile and tests. CodeQL also scans. Red = fix before merging.
+2. `build-test` runs: compile and tests. Red = fix before merging.
 3. You merge into `master`.
 4. `build-test` runs again on master, then `docker` builds and pushes 6 images tagged `sha-<commit>` and `latest` to GHCR.
 5. Anyone can now run those images with `docker compose -f docker-compose.prod.yml up -d` (set `REGISTRY` and `TAG` in `.env`).

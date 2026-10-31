@@ -1,6 +1,6 @@
 # 08 - CI/CD pipeline (GitHub Actions)
 
-Workflow: `.github/workflows/ci-cd.yml`. Extras: `codeql.yml` (security scan), `dependabot.yml` (dependency update PRs).
+Workflow: `.github/workflows/ci-cd.yml`.
 
 ## Flow
 
