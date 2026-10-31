@@ -118,9 +118,7 @@ jobs:
     needs: docker
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-22.04
-    environment:
-      name: production
-      url: http://${{ secrets.VM_HOST }}/
+    environment: production
     concurrency:
       group: deploy-production # never two deploys at once
       cancel-in-progress: false
